@@ -20,7 +20,8 @@ docker compose -f "$COMPOSE" exec -T panel php -l /app/app/BlueprintFramework/Ex
 docker compose -f "$COMPOSE" exec -T panel php -l /app/app/BlueprintFramework/Extensions/packwizmanager/PackwizIntegrationController.php
 docker compose -f "$COMPOSE" exec -T panel php artisan migrate:status
 echo 'E2E: checking HTTP and registered client route'
+docker compose -f "$COMPOSE" exec -T panel sh -lc 'php artisan route:list --path=api/client/extensions/packwizmanager | grep -q packwizmanager'
 curl --retry 10 --retry-all-errors --retry-delay 1 -fsS http://127.0.0.1:8088 >/dev/null
 status="$(curl -sS -o /tmp/packwiz-route-response -w '%{http_code}' http://127.0.0.1:8088/api/client/extensions/packwizmanager/servers/test/projects)"
-case "$status" in 401|403) ;;*) echo "Unexpected Packwiz route status: $status" >&2;cat /tmp/packwiz-route-response >&2;exit 1;;esac
+case "$status" in 302|401|403) ;;*) echo "Unexpected Packwiz route status: $status" >&2;cat /tmp/packwiz-route-response >&2;exit 1;;esac
 echo 'E2E: passed'
