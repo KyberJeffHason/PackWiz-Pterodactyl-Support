@@ -14,12 +14,9 @@ echo 'E2E: installing extension'
 docker compose -f "$COMPOSE" exec -T panel cp /blueprint_extensions/packwizmanager.blueprint /app/packwizmanager.blueprint
 docker compose -f "$COMPOSE" exec -T panel blueprint -i packwizmanager
 echo 'E2E: checking installed frontend and PHP'
-# Variables expand inside container shell.
-# shellcheck disable=SC2016
-docker compose -f "$COMPOSE" exec -T panel sh -lc 'test -n "$(find /app -name PackwizRoute.tsx -print -quit)"'
-# Variables expand inside container shell.
-# shellcheck disable=SC2016
-docker compose -f "$COMPOSE" exec -T panel sh -lc 'file="$(find /app/app -name PackwizProxyController.php -print -quit)";test -n "$file";php -l "$file"'
+docker compose -f "$COMPOSE" exec -T panel blueprint -q packwizmanager
+docker compose -f "$COMPOSE" exec -T panel sh -lc 'grep -Rql "Custom uploads" /app/public'
+docker compose -f "$COMPOSE" exec -T panel sh -lc 'find /app/app -name PackwizProxyController.php -exec php -l {} \; -quit | grep -q "No syntax errors"'
 docker compose -f "$COMPOSE" exec -T panel php artisan migrate:status
 echo 'E2E: checking HTTP and registered client route'
 curl --retry 10 --retry-all-errors --retry-delay 1 -fsS http://127.0.0.1:8088 >/dev/null
