@@ -111,6 +111,35 @@ func (m *Manager) Create(ctx context.Context, p Project) (Project, error) {
 	}
 	return p, err
 }
+func (m *Manager) Import(ctx context.Context, p Project, source string) (Project, error) {
+	if !slugPattern.MatchString(p.Slug) {
+		return p, errors.New("invalid project slug")
+	}
+	if info, err := os.Stat(filepath.Join(source, "pack.toml")); err != nil || !info.Mode().IsRegular() {
+		return p, errors.New("archive root must contain pack.toml")
+	}
+	p.ID = ID()
+	p.WorkingDirectory = filepath.Join(m.ProjectsRoot, p.ID)
+	p.CreatedAt = time.Now().UTC()
+	p.UpdatedAt = p.CreatedAt
+	if err := os.CopyFS(p.WorkingDirectory, os.DirFS(source)); err != nil {
+		return p, err
+	}
+	ok := false
+	defer func() {
+		if !ok {
+			_ = os.RemoveAll(p.WorkingDirectory)
+		}
+	}()
+	if err := m.Packwiz.Run(ctx, p.WorkingDirectory, "refresh"); err != nil {
+		return p, err
+	}
+	_, err := m.DB.ExecContext(ctx, `INSERT INTO projects(id,slug,display_name,minecraft_version,loader,loader_version,pack_version,working_directory,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?)`, p.ID, p.Slug, p.DisplayName, p.MinecraftVersion, p.Loader, p.LoaderVersion, p.PackVersion, p.WorkingDirectory, p.CreatedAt.Format(time.RFC3339Nano), p.UpdatedAt.Format(time.RFC3339Nano))
+	if err == nil {
+		ok = true
+	}
+	return p, err
+}
 func (m *Manager) List(ctx context.Context) ([]Project, error) {
 	rows, err := m.DB.QueryContext(ctx, `SELECT id,slug,display_name,minecraft_version,loader,loader_version,pack_version,working_directory,current_revision_id,created_at,updated_at FROM projects ORDER BY display_name`)
 	if err != nil {

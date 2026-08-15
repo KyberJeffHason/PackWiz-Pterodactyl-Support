@@ -1,0 +1,41 @@
+services:
+  database:
+    image: mariadb:11
+    environment: { MYSQL_DATABASE: panel, MYSQL_USER: pterodactyl, MYSQL_PASSWORD: test-password, MYSQL_ROOT_PASSWORD: root-password }
+    healthcheck: { test: [CMD, healthcheck.sh, --connect, --innodb_initialized], interval: 5s, timeout: 5s, retries: 30 }
+  cache:
+    image: valkey/valkey:alpine
+    command: --requirepass test-password
+    healthcheck: { test: [CMD, valkey-cli, -a, test-password, ping], interval: 5s, timeout: 5s, retries: 30 }
+  panel:
+    image: ghcr.io/blueprintframework/blueprint:v1.15.1
+    depends_on:
+      database: { condition: service_healthy }
+      cache: { condition: service_healthy }
+    ports: ["8088:80"]
+    volumes:
+      - panel-data:/app
+      - ../../dist:/blueprint_extensions
+    environment:
+      APP_URL: http://127.0.0.1:8088
+      APP_NAME: Packwiz-E2E
+      APP_TIMEZONE: UTC
+      APP_SERVICE_AUTHOR: test@example.com
+      APP_ENV: testing
+      APP_ENVIRONMENT_ONLY: "false"
+      APP_2FA_REQUIRED: "0"
+      RECAPTCHA_ENABLED: "false"
+      DB_HOST: database
+      DB_PORT: "3306"
+      DB_DATABASE: panel
+      DB_USERNAME: pterodactyl
+      DB_PASSWORD: test-password
+      CACHE_DRIVER: redis
+      SESSION_DRIVER: redis
+      QUEUE_CONNECTION: redis
+      REDIS_HOST: cache
+      REDIS_PASSWORD: test-password
+      MAIL_MAILER: array
+      HASHIDS_SALT: packwiz-e2e-salt
+      HASHIDS_LENGTH: "8"
+volumes: { panel-data: {} }

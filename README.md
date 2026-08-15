@@ -42,6 +42,8 @@ Stock Docker detection leaves service installed and skips extension with status 
 
 Open `/server/<identifier>/packwiz`; create project; choose Minecraft/loader; search provider. Modrinth/CurseForge calls stay server-side. Configure CurseForge via `PWM_CURSEFORGE_API_KEY` in `/etc/packwiz-manager/config.env`, then restart. Key is never returned.
 
+Existing Packwiz ZIPs can be imported with a root `pack.toml` (a single wrapper directory is also accepted). The Files tab accepts uploads or HTTP/HTTPS URL imports into the configured path allowlist. URL fetches enforce DNS/IP SSRF checks, redirect/time/size caps, and never forward service credentials. Installed Packwiz items can change client/server/both side or be removed; Settings edits pack name/version and Minecraft/loader metadata transactionally.
+
 Custom JAR tab accepts ZIP-valid `.jar`, streams SHA-256, stores content-addressed blob, and creates Packwiz metadata. **Custom JARs execute Minecraft code. Trust source.** Choose client/server/both and `mods/` destination.
 
 Publish runs `packwiz refresh`, stages regular files, hashes manifest, promotes immutable revision, and changes stable current pointer. Rollback selects old immutable revision. Stable URL: `https://pack.example.com/public/<slug>/pack.toml`.
@@ -57,13 +59,21 @@ java -jar packwiz-installer-bootstrap.jar -g -s server 'https://pack.example.com
 exec ./run.sh
 ```
 
-Apply wrapper through admin-gated workflow; retain old startup command for exact revert. Do not manage `world/`, logs, `server.properties`, ops/whitelist, or loader runtime files unless intentional.
+The Server integration tab previews, uploads, checksum-verifies, and applies this wrapper through Wings while the server is stopped. It retains the old startup command for exact revert. The action is root-admin-only and audited. Do not manage `world/`, logs, `server.properties`, ops/whitelist, or loader runtime files unless intentional.
 
 ## Reverse proxy, Cloudflare, operations
 
 Proxy only public listener: `location /public/ { proxy_pass http://127.0.0.1:8091/public/; }`. Never proxy 8090.
 
-For Cloudflare Tunnel, add `pack.example.com -> http://127.0.0.1:8091` before existing final `http_status:404`; CNAME points to `<tunnel-id>.cfargotunnel.com`. Use scoped token, preserve ingress. Installer never mutates tunnel automatically.
+Cloudflare mutation is opt-in. For a remotely managed tunnel with an existing final `http_status:404`, the installer preserves unrelated ingress and updates/creates only the requested CNAME. Use a scoped token:
+
+```bash
+sudo env CLOUDFLARE_API_TOKEN=... CF_ACCOUNT_ID=... CF_ZONE_ID=... \
+  CF_TUNNEL_ID=... CF_HOSTNAME=pack.example.com \
+  bash install.sh --version v0.2.0 --pack-host https://pack.example.com/public --configure-cloudflare
+```
+
+`CF_SERVICE_URL` defaults to `http://127.0.0.1:8091`. A DNS failure restores the prior tunnel configuration. The token is passed through a mode-0600 temporary curl config and is not logged.
 
 - Backup: stop service; copy `/srv/packwiz-manager` and `/etc/packwiz-manager`; restart.
 - Upgrade: rerun versioned installer.
@@ -75,9 +85,10 @@ For Cloudflare Tunnel, add `pack.example.com -> http://127.0.0.1:8091` before ex
 ```bash
 make check
 cd service && go test -race ./...
-bash -n installer/*.sh scripts/*.sh
-shellcheck installer/*.sh scripts/*.sh
+bash -n installer/*.sh scripts/*.sh tests/e2e/*.sh
+shellcheck installer/*.sh scripts/*.sh tests/e2e/*.sh
 find extension -name '*.php' -print0 | xargs -0 -n1 php -l
+bash tests/e2e/run.sh # live Blueprint/PHP/MariaDB/Valkey Docker fixture
 ```
 
 Assets: manager tarballs for amd64/arm64, pinned Packwiz, `packwizmanager.blueprint`, installers, `SHA256SUMS`, SPDX SBOM.
@@ -86,6 +97,6 @@ Assets: manager tarballs for amd64/arm64, pinned Packwiz, `packwizmanager.bluepr
 
 Constant-time token checks; extension-derived permissions; size/ZIP limits; symlink/path rejection; SSRF-safe resolution and redirects; no shell interpolation; GET/HEAD-only public handler. Public endpoint cannot reach drafts, DB, logs, or secrets.
 
-v0.2 is single-node SQLite. Blueprint cannot safely extend native Pterodactyl permission enums, so extension maps permissions at proxy. Live Blueprint/Pterodactyl/provider-key validation remains deployment-specific; CI uses deterministic mocks.
+v0.2 is single-node SQLite. Blueprint cannot safely extend native Pterodactyl permission enums, so extension maps permissions at proxy. Provider-key validation remains deployment-specific. CI includes deterministic Go tests plus a live Blueprint Docker extension install, route, migration, frontend, and HTTP fixture.
 
 See [ADR](docs/decisions/0001-service-boundaries.md) and [changelog](CHANGELOG.md).

@@ -22,6 +22,7 @@ import (
 	"github.com/packwiz-manager/packwiz-manager/service/internal/providers/curseforge"
 	"github.com/packwiz-manager/packwiz-manager/service/internal/providers/modrinth"
 	"github.com/packwiz-manager/packwiz-manager/service/internal/publishing"
+	"github.com/packwiz-manager/packwiz-manager/service/internal/security"
 )
 
 var version = "dev"
@@ -47,7 +48,7 @@ func main() {
 	runner := packwiz.Runner{Binary: cfg.PackwizBinary, Timeout: cfg.CommandTimeout}
 	pm := &projects.Manager{DB: d, ProjectsRoot: filepath.Join(cfg.DataDir, "projects"), Packwiz: runner}
 	pub := &publishing.Publisher{DB: d, ReleasesRoot: filepath.Join(cfg.DataDir, "releases"), Packwiz: runner, Manager: pm, ManagerVersion: version, PackwizCommit: os.Getenv("PWM_PACKWIZ_COMMIT"), PackwizSHA256: fileSHA(cfg.PackwizBinary)}
-	app := &api.API{Projects: pm, Publisher: pub, Blobs: files.Store{Root: filepath.Join(cfg.DataDir, "blobs"), MaxBytes: cfg.MaxUpload}, DB: d, Modrinth: modrinth.New(version), CurseForge: curseforge.New(cfg.CurseForgeKey), PublicBaseURL: cfg.PublicBaseURL}
+	app := &api.API{Projects: pm, Publisher: pub, Blobs: files.Store{Root: filepath.Join(cfg.DataDir, "blobs"), MaxBytes: cfg.MaxUpload}, DB: d, Modrinth: modrinth.New(version), CurseForge: curseforge.New(cfg.CurseForgeKey), PublicBaseURL: cfg.PublicBaseURL, TmpRoot: filepath.Join(cfg.DataDir, "tmp"), RemoteHTTP: security.SafeHTTPClient(30 * time.Second), MaxArchiveBytes: cfg.MaxUpload * 4, MaxArchiveFiles: 10000}
 	management := http.NewServeMux()
 	management.HandleFunc("GET /healthz", func(w http.ResponseWriter, _ *http.Request) { w.Write([]byte("ok\n")) })
 	management.HandleFunc("GET /readyz", func(w http.ResponseWriter, r *http.Request) {

@@ -29,13 +29,17 @@ import (
 )
 
 type API struct {
-	Projects      *projects.Manager
-	Publisher     *publishing.Publisher
-	Blobs         files.Store
-	DB            *sql.DB
-	Modrinth      *modrinth.Client
-	CurseForge    *curseforge.Client
-	PublicBaseURL string
+	Projects        *projects.Manager
+	Publisher       *publishing.Publisher
+	Blobs           files.Store
+	DB              *sql.DB
+	Modrinth        *modrinth.Client
+	CurseForge      *curseforge.Client
+	PublicBaseURL   string
+	TmpRoot         string
+	RemoteHTTP      *http.Client
+	MaxArchiveBytes int64
+	MaxArchiveFiles int
 }
 type rateWindow struct {
 	at    time.Time
@@ -50,14 +54,29 @@ var mutationRates = struct {
 func (a *API) Routes() http.Handler {
 	m := http.NewServeMux()
 	m.HandleFunc("GET /projects", a.listProjects)
+	m.HandleFunc("GET /projects/{id}", func(w http.ResponseWriter, r *http.Request) {
+		if !permission(w, r, "packwiz.read") {
+			return
+		}
+		v, err := a.Projects.Get(r.Context(), r.PathValue("id"))
+		respond(w, v, err)
+	})
 	m.HandleFunc("POST /projects", a.createProject)
+	m.HandleFunc("PATCH /projects/{id}", a.updateProject)
+	m.HandleFunc("POST /projects/import", a.importProject)
 	m.HandleFunc("POST /projects/{id}/custom-jars", a.uploadJAR)
 	m.HandleFunc("POST /projects/{id}/files", a.uploadFile)
+	m.HandleFunc("POST /projects/{id}/url-imports", a.importURL)
 	m.HandleFunc("POST /projects/{id}/mods", a.addMod)
+	m.HandleFunc("GET /projects/{id}/items", a.listItems)
+	m.HandleFunc("PATCH /projects/{id}/items/{item}/side", a.updateItemSide)
+	m.HandleFunc("DELETE /projects/{id}/items/{item}", a.removeItem)
 	m.HandleFunc("POST /projects/{id}/publish", a.publish)
 	m.HandleFunc("GET /projects/{id}/revisions", a.listRevisions)
 	m.HandleFunc("GET /projects/{id}/revisions/diff", a.diffRevisions)
 	m.HandleFunc("POST /projects/{id}/rollback/{revision}", a.rollback)
+	m.HandleFunc("GET /projects/{id}/server-links/{server}", a.getServerLink)
+	m.HandleFunc("PUT /projects/{id}/server-links/{server}", a.putServerLink)
 	m.HandleFunc("GET /providers/modrinth/search", a.searchModrinth)
 	m.HandleFunc("GET /providers/curseforge/search", a.searchCurseForge)
 	return requestID(rateMutations(recoverJSON(m)))
@@ -207,6 +226,10 @@ func (a *API) addMod(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	err = a.Projects.MutateAndCommit(r.Context(), r.PathValue("id"), func(p projects.Project) error {
+		before, err := metadataFiles(p.WorkingDirectory)
+		if err != nil {
+			return err
+		}
 		var args []string
 		switch in.Provider {
 		case "modrinth":
@@ -216,7 +239,20 @@ func (a *API) addMod(w http.ResponseWriter, r *http.Request) {
 		default:
 			return errors.New("unsupported provider")
 		}
-		return a.Projects.Packwiz.Run(r.Context(), p.WorkingDirectory, args...)
+		if err = a.Projects.Packwiz.Run(r.Context(), p.WorkingDirectory, args...); err != nil {
+			return err
+		}
+		meta, err := providerMetadataPath(p.WorkingDirectory, before, in.Provider, in.ProjectID)
+		if err != nil {
+			return err
+		}
+		if err = setMetadataSide(p.WorkingDirectory, meta, in.Side); err != nil {
+			return err
+		}
+		if _, err = tx.ExecContext(r.Context(), `UPDATE items SET target_path=?,filename=? WHERE id=?`, meta, path.Base(meta), id); err != nil {
+			return err
+		}
+		return a.Projects.Packwiz.Run(r.Context(), p.WorkingDirectory, "refresh")
 	}, tx.Commit)
 	if err != nil {
 		respond(w, nil, err)
