@@ -20,6 +20,7 @@ services:
     environment:
       APP_URL: http://127.0.0.1:8088
       APP_NAME: Packwiz-E2E
+      APP_KEY: base64:cGFja3dpei1lMmUtYXBwLWtleS0yMDI2LTA4LTE2IXg=
       APP_TIMEZONE: UTC
       APP_SERVICE_AUTHOR: test@example.com
       APP_ENV: testing
