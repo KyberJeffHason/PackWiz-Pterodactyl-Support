@@ -14,9 +14,11 @@ echo 'E2E: installing extension'
 docker compose -f "$COMPOSE" exec -T panel cp /blueprint_extensions/packwizmanager.blueprint /app/packwizmanager.blueprint
 docker compose -f "$COMPOSE" exec -T panel blueprint -i packwizmanager
 echo 'E2E: checking installed frontend and PHP'
-# shellcheck disable=SC2016 -- variables expand inside container shell.
+# Variables expand inside container shell.
+# shellcheck disable=SC2016
 docker compose -f "$COMPOSE" exec -T panel sh -lc 'test -n "$(find /app -name PackwizRoute.tsx -print -quit)"'
-# shellcheck disable=SC2016 -- variables expand inside container shell.
+# Variables expand inside container shell.
+# shellcheck disable=SC2016
 docker compose -f "$COMPOSE" exec -T panel sh -lc 'file="$(find /app/app -name PackwizProxyController.php -print -quit)";test -n "$file";php -l "$file"'
 docker compose -f "$COMPOSE" exec -T panel php artisan migrate:status
 echo 'E2E: checking HTTP and registered client route'
