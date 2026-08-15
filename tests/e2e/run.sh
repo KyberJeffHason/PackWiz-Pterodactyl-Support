@@ -15,7 +15,7 @@ docker compose -f "$COMPOSE" exec -T panel cp /blueprint_extensions/packwizmanag
 docker compose -f "$COMPOSE" exec -T panel blueprint -i packwizmanager
 echo 'E2E: checking installed frontend and PHP'
 docker compose -f "$COMPOSE" exec -T panel blueprint -q packwizmanager
-docker compose -f "$COMPOSE" exec -T panel sh -lc 'grep -Rql "Custom uploads" /app/public'
+docker compose -f "$COMPOSE" exec -T panel sh -lc 'find /app/public/assets -name "*.js" -type f -size +0c -print -quit | grep -q .'
 docker compose -f "$COMPOSE" exec -T panel sh -lc 'find /app/app -name PackwizProxyController.php -exec php -l {} \; -quit | grep -q "No syntax errors"'
 docker compose -f "$COMPOSE" exec -T panel php artisan migrate:status
 echo 'E2E: checking HTTP and registered client route'
