@@ -11,6 +11,7 @@ class packwizmanagerExtensionController extends Controller
 {
     public function __construct(private BlueprintExtensionLibrary $blueprint) {}
     public function index() { return view('admin.extensions.packwizmanager.index', [
+        'blueprint' => $this->blueprint,
         'configured' => $this->blueprint->dbGet('packwizmanager', 'service_token', '') !== '',
         'serviceUrl' => $this->blueprint->dbGet('packwizmanager', 'service_url', 'http://127.0.0.1:8090/api/v1'),
         'publicUrl' => $this->blueprint->dbGet('packwizmanager', 'public_url', ''),

@@ -31,10 +31,10 @@ class PackwizIntegrationController extends Controller
         private StartupModificationService $startup,
     ) {}
 
-    private function server(Request $request, string $identifier): Server
+    private function server(Request $request, Server $server): Server
     {
         abort_unless($request->user()->root_admin, 403, 'Administrator permission required.');
-        return Server::query()->where('uuidShort', $identifier)->orWhere('uuid', $identifier)->firstOrFail();
+        return $server;
     }
 
     private function service(Request $request, string $permission): PendingRequest
@@ -72,13 +72,13 @@ class PackwizIntegrationController extends Controller
         abort_unless(($details['state'] ?? null) === 'offline', 409, 'Stop server before changing integration.');
     }
 
-    public function preview(Request $request, string $server, string $project): Response
+    public function preview(Request $request, Server $server, string $project): Response
     {
         $model = $this->server($request, $server);
         return response()->json($this->plan($request, $model, $project));
     }
 
-    public function install(Request $request, string $server, string $project): Response
+    public function install(Request $request, Server $server, string $project): Response
     {
         $model = $this->server($request, $server);
         $plan = $this->plan($request, $model, $project);
@@ -125,7 +125,7 @@ class PackwizIntegrationController extends Controller
         return response()->json($plan);
     }
 
-    public function revert(Request $request, string $server, string $project): Response
+    public function revert(Request $request, Server $server, string $project): Response
     {
         $model = $this->server($request, $server);
         $key = 'startup:'.$model->uuid;
