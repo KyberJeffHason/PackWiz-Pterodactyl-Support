@@ -16,6 +16,7 @@ services:
     ports: ["8088:80"]
     volumes:
       - panel-data:/app
+      - panel-var:/app/var
       - ../../dist:/blueprint_extensions
     environment:
       APP_URL: http://127.0.0.1:8088
@@ -42,4 +43,4 @@ services:
       MAIL_FROM_NAME: Packwiz-E2E
       HASHIDS_SALT: packwiz-e2e-salt
       HASHIDS_LENGTH: "8"
-volumes: { panel-data: {} }
+volumes: { panel-data: {}, panel-var: {} }
