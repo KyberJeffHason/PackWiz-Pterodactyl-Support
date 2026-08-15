@@ -1,0 +1,21 @@
+info:
+  name: 'Packwiz Manager'
+  identifier: 'packwizmanager'
+  description: 'Manage and publish Packwiz projects from Pterodactyl.'
+  version: '0.2.0'
+  target: 'beta-2026-05'
+  author: 'Packwiz Manager contributors'
+  website: 'https://github.com/packwiz-manager/packwiz-manager'
+admin:
+  view: 'admin/view.blade.php'
+  controller: 'admin/packwizmanagerExtensionController.php'
+dashboard:
+  components: 'dashboard'
+requests:
+  app: 'app'
+  routers:
+    client: 'api/client.php'
+data:
+  directory: 'data'
+database:
+  migrations: 'migrations'

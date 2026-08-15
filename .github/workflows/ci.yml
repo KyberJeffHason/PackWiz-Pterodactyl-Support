@@ -1,0 +1,31 @@
+name: CI
+on: [push, pull_request]
+permissions: { contents: read }
+jobs:
+  go:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with: { go-version-file: service/go.mod, cache-dependency-path: service/go.sum }
+      - run: test -z "$(gofmt -l .)"
+        working-directory: service
+      - run: go vet ./... && go test -race ./... && go build ./cmd/packwiz-manager
+        working-directory: service
+  extension-and-shell:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: sudo apt-get update && sudo apt-get install -y shellcheck php-cli
+      - run: shellcheck installer/*.sh scripts/*.sh && bash -n installer/*.sh scripts/*.sh
+      - run: cp -a extension /tmp/extension-lint && grep -rl '{appcontext}' /tmp/extension-lint | xargs sed -i 's/{appcontext}/Pterodactyl\\BlueprintFramework\\Extensions\\packwizmanager/g' && find /tmp/extension-lint -name '*.php' -print0 | xargs -0 -n1 php -l
+      - run: bash scripts/build-blueprint.sh dist
+      - uses: actions/upload-artifact@v4
+        with: { name: blueprint-extension, path: dist/packwizmanager.blueprint }
+  pinned-packwiz:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with: { go-version: '1.24.x' }
+      - run: git clone https://github.com/packwiz/packwiz.git /tmp/packwiz && git -C /tmp/packwiz checkout "$(cat PACKWIZ_REF)" && cd /tmp/packwiz && go build ./

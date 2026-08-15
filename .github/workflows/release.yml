@@ -1,0 +1,31 @@
+name: Release
+on:
+  push: { tags: ['v*'] }
+permissions: { contents: write, id-token: write, attestations: write }
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy: { matrix: { arch: [amd64, arm64] } }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with: { go-version: '1.24.x' }
+      - run: test "v$(cat VERSION)" = "$GITHUB_REF_NAME"
+      - run: git clone https://github.com/packwiz/packwiz.git /tmp/packwiz && git -C /tmp/packwiz checkout "$(cat PACKWIZ_REF)" && cd /tmp/packwiz && CGO_ENABLED=0 GOOS=linux GOARCH=${{ matrix.arch }} go build -trimpath -o /tmp/packwiz-bin .
+      - run: mkdir -p dist && cd service && CGO_ENABLED=0 GOOS=linux GOARCH=${{ matrix.arch }} go build -trimpath -ldflags "-s -w -X main.version=$(cat ../VERSION)" -o ../dist/packwiz-manager ./cmd/packwiz-manager
+      - run: GOARCH=${{ matrix.arch }} PACKWIZ_BINARY=/tmp/packwiz-bin bash scripts/package-release.sh
+      - uses: actions/upload-artifact@v4
+        with: { name: release-${{ matrix.arch }}, path: dist/* }
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with: { pattern: release-*, path: release, merge-multiple: true }
+      - run: cd release && sha256sum packwiz-manager-linux-*.tar.gz packwizmanager.blueprint install.sh uninstall.sh > SHA256SUMS
+      - uses: anchore/sbom-action@v0
+        with: { path: release, format: spdx-json, output-file: release/sbom.spdx.json }
+      - uses: actions/attest-build-provenance@v2
+        with: { subject-path: 'release/*' }
+      - uses: softprops/action-gh-release@v2
+        with: { files: 'release/*', generate_release_notes: true }
