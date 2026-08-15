@@ -6,6 +6,7 @@ services:
   cache:
     image: valkey/valkey:alpine
     command: --requirepass test-password
+    environment: { REDISCLI_AUTH: test-password }
     healthcheck: { test: [CMD, valkey-cli, -a, test-password, ping], interval: 5s, timeout: 5s, retries: 30 }
   panel:
     image: ghcr.io/blueprintframework/blueprint:v1.15.1
@@ -32,10 +33,12 @@ services:
       DB_PASSWORD: test-password
       CACHE_DRIVER: redis
       SESSION_DRIVER: redis
-      QUEUE_CONNECTION: redis
+      QUEUE_DRIVER: redis
       REDIS_HOST: cache
       REDIS_PASSWORD: test-password
-      MAIL_MAILER: array
+      MAIL_DRIVER: array
+      MAIL_FROM_ADDRESS: test@example.com
+      MAIL_FROM_NAME: Packwiz-E2E
       HASHIDS_SALT: packwiz-e2e-salt
       HASHIDS_LENGTH: "8"
 volumes: { panel-data: {} }
