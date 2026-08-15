@@ -22,6 +22,7 @@ jobs:
       - run: bash scripts/build-blueprint.sh dist
       - uses: actions/upload-artifact@v4
         with: { name: blueprint-extension, path: dist/packwizmanager.blueprint }
+      - run: install -m 0755 /bin/true dist/packwiz-manager && PACKWIZ_BINARY=/bin/true GOARCH=test bash scripts/package-release.sh && tar -tzf dist/packwiz-manager-linux-test.tar.gz | grep -qx './packwiz-manager' && (cd dist && sha256sum -c SHA256SUMS)
   pinned-packwiz:
     runs-on: ubuntu-latest
     steps:
