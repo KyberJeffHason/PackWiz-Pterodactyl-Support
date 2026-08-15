@@ -1,8 +1,8 @@
 <?php
 
 use Illuminate\Support\Facades\Route;
-use {appcontext}\PackwizProxyController;
-use {appcontext}\PackwizIntegrationController;
+use Pterodactyl\BlueprintFramework\Extensions\packwizmanager\PackwizProxyController;
+use Pterodactyl\BlueprintFramework\Extensions\packwizmanager\PackwizIntegrationController;
 
 Route::get('/servers/{server}/projects', [PackwizProxyController::class, 'projects']);
 Route::post('/servers/{server}/projects', [PackwizProxyController::class, 'create']);

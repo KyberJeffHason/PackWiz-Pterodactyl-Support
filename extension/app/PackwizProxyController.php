@@ -1,6 +1,6 @@
 <?php
 
-namespace {appcontext};
+namespace Pterodactyl\BlueprintFramework\Extensions\packwizmanager;
 
 use Illuminate\Http\Client\PendingRequest;
 use Illuminate\Http\Request;
