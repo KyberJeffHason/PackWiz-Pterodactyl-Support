@@ -7,6 +7,24 @@ import { Callout, Card, Icon, Pill, SectionHeading, errorMessage } from './ui';
 type Project={id:string;slug:string;display_name:string;minecraft_version:string;loader:string;loader_version?:string;pack_version:string;current_revision?:string};
 type Mode='create'|'replace';
 
+// Pterodactyl's shared Axios instance defaults every request to application/json.
+// Remove that merged default only for real FormData payloads so Axios/the browser
+// can emit multipart/form-data with the required boundary. ImportProject is loaded
+// by the Packwiz route itself, so this also fixes the custom-JAR and managed-file
+// upload forms that use the same HTTP instance.
+const packwizHttp=http as typeof http&{__packwizMultipartInterceptor?:boolean};
+if(!packwizHttp.__packwizMultipartInterceptor){
+    packwizHttp.interceptors.request.use(config=>{
+        if(typeof FormData!=='undefined'&&config.data instanceof FormData){
+            const headers=config.headers as any;
+            if(headers&&typeof headers.delete==='function')headers.delete('Content-Type');
+            else if(headers)delete headers['Content-Type'];
+        }
+        return config;
+    });
+    packwizHttp.__packwizMultipartInterceptor=true;
+}
+
 const cookieName=(base:string)=>{
     const id=base.match(/\/servers\/([^/]+)/)?.[1]||'server';
     return `packwiz_project_${id.replace(/-/g,'_')}`;
