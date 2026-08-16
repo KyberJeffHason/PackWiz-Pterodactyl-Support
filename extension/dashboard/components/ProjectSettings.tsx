@@ -9,7 +9,25 @@ export type Project={id:string;slug:string;display_name:string;minecraft_version
 
 export default({base,project,reload}:{base:string;project:Project;reload:()=>void})=>{
     const[busy,setBusy]=useState(false),[error,setError]=useState(''),[saved,setSaved]=useState(false);
+    const[exporting,setExporting]=useState(false),[exportError,setExportError]=useState('');
     const save=async(e:React.FormEvent<HTMLFormElement>)=>{e.preventDefault();setBusy(true);setError('');setSaved(false);try{await http.patch(`${base}/projects/${project.id}`,Object.fromEntries(new FormData(e.currentTarget)));setSaved(true);reload()}catch(err:any){setError(errorMessage(err))}finally{setBusy(false)}};
+    const exportClient=async()=>{
+        if(!project.current_revision)return;
+        setExporting(true);setExportError('');
+        try{
+            const r=await http.get(`${base}/projects/${project.id}/client-export`,{responseType:'blob'});
+            const blob=r.data instanceof Blob?r.data:new Blob([r.data],{type:'application/zip'});
+            const url=URL.createObjectURL(blob);
+            const a=document.createElement('a');
+            a.href=url;a.download=`${project.slug}-client.zip`;document.body.appendChild(a);a.click();a.remove();
+            window.setTimeout(()=>URL.revokeObjectURL(url),1000);
+        }catch(err:any){
+            let message=errorMessage(err);
+            const data=err?.response?.data;
+            if(data instanceof Blob){try{const parsed=JSON.parse(await data.text());message=parsed?.message||parsed?.error||message}catch{}}
+            setExportError(message);
+        }finally{setExporting(false)}
+    };
     return <div className="pwm-grid" style={{gap:14}}>
         <Card><SectionHeading icon="settings" title="Project settings" description="Update pack metadata. Packwiz is re-initialized with these values while preserving the managed project tree." actions={<Pill><Icon name="package" size={13}/>{project.slug}</Pill>}/>
             {error&&<div style={{marginBottom:12}}><Callout tone="error" icon="warning" title="Could not save settings">{error}</Callout></div>}{saved&&<div style={{marginBottom:12}}><Callout tone="good" icon="check">Project metadata saved successfully.</Callout></div>}
@@ -21,6 +39,10 @@ export default({base,project,reload}:{base:string;project:Project;reload:()=>voi
                 <div className="pwm-field"><label className="pwm-label">Loader version</label><Input name="loader_version" defaultValue={project.loader_version} required/></div>
                 <div className="full pwm-actions-right"><Button type="submit" disabled={busy}><span style={{display:'inline-flex',alignItems:'center',gap:6}}><Icon name="check" size={14}/>{busy?'Saving…':'Save metadata'}</span></Button></div>
             </form>
+        </Card>
+        <Card><SectionHeading icon="package" title="Client launcher ZIP" description="Generate a tiny Prism/Freesm-compatible instance that stays connected to this hosted Packwiz project." actions={<Pill tone={project.current_revision?'good':'warn'}>{project.current_revision?'Auto-updating':'Publish required'}</Pill>}/>
+            {exportError&&<div style={{marginBottom:12}}><Callout tone="error" icon="warning" title="Client export failed">{exportError}</Callout></div>}
+            {project.current_revision?<div className="pwm-grid" style={{gap:12}}><Callout icon="refresh" title="Import once, update automatically">The ZIP contains launcher metadata and the verified Packwiz bootstrap. Players import it into Prism Launcher, Freesm or another compatible Prism/MultiMC fork; before every launch it checks your hosted pack.toml and downloads the current client-side mods, configs and resources.</Callout><div className="pwm-kv"><div className="pwm-kv-key">Pack</div><div className="pwm-kv-value">{project.display_name}</div><div className="pwm-kv-key">Runtime</div><div className="pwm-kv-value">Minecraft {project.minecraft_version} · {project.loader} {project.loader_version}</div><div className="pwm-kv-key">Distribution</div><div className="pwm-kv-value">Hosted Packwiz · current published revision</div></div><div className="pwm-actions-right"><Button type="button" onClick={exportClient} disabled={exporting}><span style={{display:'inline-flex',alignItems:'center',gap:6}}><Icon name="package" size={14}/>{exporting?'Building client ZIP…':'Export client ZIP'}</span></Button></div></div>:<Callout tone="warn" icon="warning" title="Publish the pack first">The client ZIP points at the stable hosted pack URL, so a published revision must exist before it can be distributed. Open Releases, publish the current working tree, then return here to export.</Callout>}
         </Card>
         <Card muted><SectionHeading icon="info" title="Project identity" description="Stable identifiers are intentionally not editable because published URLs and integrations reference them."/><div className="pwm-kv"><div className="pwm-kv-key">Project ID</div><div className="pwm-kv-value pwm-code">{project.id}</div><div className="pwm-kv-key">Slug</div><div className="pwm-kv-value pwm-code">{project.slug}</div><div className="pwm-kv-key">Published revision</div><div className="pwm-kv-value">{project.current_revision||'Not published yet'}</div></div></Card>
         <ImportProject base={base} reload={reload} currentProject={project}/>
