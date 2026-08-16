@@ -20,6 +20,15 @@ type Hit struct {
 	Versions    []string `json:"versions"`
 	Categories  []string `json:"categories"`
 }
+type Version struct {
+	ID            string   `json:"id"`
+	Name          string   `json:"name"`
+	VersionNumber string   `json:"version_number"`
+	VersionType   string   `json:"version_type"`
+	DatePublished string   `json:"date_published"`
+	GameVersions  []string `json:"game_versions"`
+	Loaders       []string `json:"loaders"`
+}
 type searchResponse struct {
 	Hits  []Hit `json:"hits"`
 	Total int   `json:"total_hits"`
@@ -56,6 +65,25 @@ func (c *Client) Search(ctx context.Context, query, mc, loader string, limit, of
 		return SearchResult{}, err
 	}
 	return SearchResult{Hits: out.Hits, Total: out.Total}, nil
+}
+func (c *Client) Versions(ctx context.Context, projectID, mc, loader string) ([]Version, error) {
+	u, _ := url.Parse(c.BaseURL + "/project/" + url.PathEscape(projectID) + "/version")
+	q := u.Query()
+	if mc != "" {
+		gameVersions, _ := json.Marshal([]string{mc})
+		q.Set("game_versions", string(gameVersions))
+	}
+	if loader != "" {
+		loaders, _ := json.Marshal([]string{loader})
+		q.Set("loaders", string(loaders))
+	}
+	q.Set("include_changelog", "false")
+	u.RawQuery = q.Encode()
+	var out []Version
+	if err := c.get(ctx, u.String(), &out); err != nil {
+		return nil, err
+	}
+	return out, nil
 }
 func (c *Client) get(ctx context.Context, endpoint string, out any) error {
 	var last error

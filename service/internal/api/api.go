@@ -444,6 +444,29 @@ func (a *API) searchModrinth(w http.ResponseWriter, r *http.Request) {
 	if !permission(w, r, "packwiz.read") {
 		return
 	}
+	if projectID := strings.TrimSpace(r.URL.Query().Get("versions_for")); projectID != "" {
+		if !publicPart.MatchString(projectID) {
+			bad(w, errors.New("invalid provider project id"))
+			return
+		}
+		versions, err := a.Modrinth.Versions(r.Context(), projectID, r.URL.Query().Get("minecraft"), r.URL.Query().Get("loader"))
+		if err != nil {
+			respond(w, nil, err)
+			return
+		}
+		items := make([]map[string]any, 0, len(versions))
+		for _, version := range versions {
+			items = append(items, map[string]any{
+				"id":             version.ID,
+				"name":           version.Name,
+				"version_number": version.VersionNumber,
+				"channel":        version.VersionType,
+				"published":      version.DatePublished,
+			})
+		}
+		respond(w, map[string]any{"items": items, "total": len(items), "page": 1, "page_size": len(items)}, nil)
+		return
+	}
 	page, pageSize, offset := pageParams(r, 20, 100)
 	result, err := a.Modrinth.Search(r.Context(), r.URL.Query().Get("q"), r.URL.Query().Get("minecraft"), r.URL.Query().Get("loader"), pageSize, offset)
 	if err != nil {
@@ -454,6 +477,48 @@ func (a *API) searchModrinth(w http.ResponseWriter, r *http.Request) {
 }
 func (a *API) searchCurseForge(w http.ResponseWriter, r *http.Request) {
 	if !permission(w, r, "packwiz.read") {
+		return
+	}
+	if projectID := strings.TrimSpace(r.URL.Query().Get("versions_for")); projectID != "" {
+		if !publicPart.MatchString(projectID) {
+			bad(w, errors.New("invalid provider project id"))
+			return
+		}
+		result, err := a.CurseForge.Files(r.Context(), projectID, r.URL.Query().Get("minecraft"), r.URL.Query().Get("loader"), 50, 0)
+		if err != nil {
+			respond(w, nil, err)
+			return
+		}
+		allFiles := append([]curseforge.File(nil), result.Files...)
+		for len(allFiles) < result.Total && len(result.Files) > 0 {
+			result, err = a.CurseForge.Files(r.Context(), projectID, r.URL.Query().Get("minecraft"), r.URL.Query().Get("loader"), 50, len(allFiles))
+			if err != nil {
+				respond(w, nil, err)
+				return
+			}
+			allFiles = append(allFiles, result.Files...)
+		}
+		items := make([]map[string]any, 0, len(allFiles))
+		for _, file := range allFiles {
+			channel := "unknown"
+			switch file.ReleaseType {
+			case 1:
+				channel = "release"
+			case 2:
+				channel = "beta"
+			case 3:
+				channel = "alpha"
+			}
+			items = append(items, map[string]any{
+				"id":             strconv.Itoa(file.ID),
+				"name":           file.DisplayName,
+				"version_number": file.DisplayName,
+				"channel":        channel,
+				"published":      file.FileDate,
+				"filename":       file.FileName,
+			})
+		}
+		respond(w, map[string]any{"items": items, "total": len(items), "page": 1, "page_size": len(items)}, nil)
 		return
 	}
 	page, pageSize, offset := pageParams(r, 20, 50)
