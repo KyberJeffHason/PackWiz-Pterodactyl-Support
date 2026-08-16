@@ -200,6 +200,8 @@ func (a *API) addMod(w http.ResponseWriter, r *http.Request) {
 		VersionID   string `json:"version_id"`
 		DisplayName string `json:"display_name"`
 		Side        string `json:"side"`
+		IconURL     string `json:"icon_url"`
+		Author      string `json:"author"`
 	}
 	if err := decode(r, &in); err != nil {
 		bad(w, err)
@@ -213,6 +215,28 @@ func (a *API) addMod(w http.ResponseWriter, r *http.Request) {
 		bad(w, errors.New("invalid provider identifiers"))
 		return
 	}
+	in.IconURL = strings.TrimSpace(in.IconURL)
+	in.Author = strings.TrimSpace(in.Author)
+	if len(in.IconURL) > 2048 || (in.IconURL != "" && !strings.HasPrefix(strings.ToLower(in.IconURL), "https://")) {
+		bad(w, errors.New("icon_url must be an HTTPS URL"))
+		return
+	}
+	if len(in.Author) > 200 {
+		bad(w, errors.New("author is too long"))
+		return
+	}
+	meta := map[string]string{}
+	if in.IconURL != "" {
+		meta["icon_url"] = in.IconURL
+	}
+	if in.Author != "" {
+		meta["author"] = in.Author
+	}
+	metadata, err := json.Marshal(meta)
+	if err != nil {
+		respond(w, nil, err)
+		return
+	}
 	now := time.Now().UTC().Format(time.RFC3339Nano)
 	id := projects.ID()
 	tx, err := a.DB.BeginTx(r.Context(), nil)
@@ -221,7 +245,7 @@ func (a *API) addMod(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer tx.Rollback()
-	if _, err = tx.ExecContext(r.Context(), `INSERT INTO items(id,project_id,kind,provider,provider_project_id,provider_version_id,display_name,target_path,filename,side,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)`, id, r.PathValue("id"), "mod", in.Provider, in.ProjectID, in.VersionID, in.DisplayName, "mods", "", in.Side, now, now); err != nil {
+	if _, err = tx.ExecContext(r.Context(), `INSERT INTO items(id,project_id,kind,provider,provider_project_id,provider_version_id,display_name,target_path,filename,side,metadata_json,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)`, id, r.PathValue("id"), "mod", in.Provider, in.ProjectID, in.VersionID, in.DisplayName, "mods", "", in.Side, string(metadata), now, now); err != nil {
 		respond(w, nil, err)
 		return
 	}
@@ -242,14 +266,14 @@ func (a *API) addMod(w http.ResponseWriter, r *http.Request) {
 		if err = a.Projects.Packwiz.Run(r.Context(), p.WorkingDirectory, args...); err != nil {
 			return err
 		}
-		meta, err := providerMetadataPath(p.WorkingDirectory, before, in.Provider, in.ProjectID)
+		metaPath, err := providerMetadataPath(p.WorkingDirectory, before, in.Provider, in.ProjectID)
 		if err != nil {
 			return err
 		}
-		if err = setMetadataSide(p.WorkingDirectory, meta, in.Side); err != nil {
+		if err = setMetadataSide(p.WorkingDirectory, metaPath, in.Side); err != nil {
 			return err
 		}
-		if _, err = tx.ExecContext(r.Context(), `UPDATE items SET target_path=?,filename=? WHERE id=?`, meta, path.Base(meta), id); err != nil {
+		if _, err = tx.ExecContext(r.Context(), `UPDATE items SET target_path=?,filename=? WHERE id=?`, metaPath, path.Base(metaPath), id); err != nil {
 			return err
 		}
 		return a.Projects.Packwiz.Run(r.Context(), p.WorkingDirectory, "refresh")
@@ -420,15 +444,43 @@ func (a *API) searchModrinth(w http.ResponseWriter, r *http.Request) {
 	if !permission(w, r, "packwiz.read") {
 		return
 	}
-	v, err := a.Modrinth.Search(r.Context(), r.URL.Query().Get("q"), r.URL.Query().Get("minecraft"), r.URL.Query().Get("loader"), 20)
-	respond(w, v, err)
+	page, pageSize, offset := pageParams(r, 20, 100)
+	result, err := a.Modrinth.Search(r.Context(), r.URL.Query().Get("q"), r.URL.Query().Get("minecraft"), r.URL.Query().Get("loader"), pageSize, offset)
+	if err != nil {
+		respond(w, nil, err)
+		return
+	}
+	respond(w, map[string]any{"items": result.Hits, "total": result.Total, "page": page, "page_size": pageSize}, nil)
 }
 func (a *API) searchCurseForge(w http.ResponseWriter, r *http.Request) {
 	if !permission(w, r, "packwiz.read") {
 		return
 	}
-	v, err := a.CurseForge.Search(r.Context(), r.URL.Query().Get("q"), r.URL.Query().Get("minecraft"), r.URL.Query().Get("loader"), 6, 20)
-	respond(w, v, err)
+	page, pageSize, offset := pageParams(r, 20, 50)
+	result, err := a.CurseForge.Search(r.Context(), r.URL.Query().Get("q"), r.URL.Query().Get("minecraft"), r.URL.Query().Get("loader"), 6, pageSize, offset)
+	if err != nil {
+		respond(w, nil, err)
+		return
+	}
+	respond(w, map[string]any{"items": result.Mods, "total": result.Total, "page": page, "page_size": pageSize}, nil)
+}
+func pageParams(r *http.Request, defaultSize, maxSize int) (page, size, offset int) {
+	page = 1
+	size = defaultSize
+	if n, err := strconv.Atoi(r.URL.Query().Get("page")); err == nil && n > 0 {
+		page = n
+	}
+	if n, err := strconv.Atoi(r.URL.Query().Get("page_size")); err == nil && n > 0 {
+		size = n
+	}
+	if size > maxSize {
+		size = maxSize
+	}
+	if size < 1 {
+		size = defaultSize
+	}
+	offset = (page - 1) * size
+	return
 }
 func permission(w http.ResponseWriter, r *http.Request, want string) bool {
 	for _, p := range strings.Split(r.Header.Get("X-Packwiz-Permissions"), ",") {

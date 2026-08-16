@@ -12,13 +12,16 @@ func TestSearchParsing(t *testing.T) {
 		if r.Header.Get("User-Agent") == "" {
 			t.Error("missing UA")
 		}
-		w.Write([]byte(`{"hits":[{"project_id":"abc","title":"Test","author":"A"}],"total_hits":1}`))
+		if r.URL.Query().Get("offset") != "20" {
+			t.Errorf("unexpected offset: %s", r.URL.Query().Get("offset"))
+		}
+		w.Write([]byte(`{"hits":[{"project_id":"abc","title":"Test","author":"A","icon_url":"https://cdn.example/icon.png"}],"total_hits":37}`))
 	}))
 	defer s.Close()
 	c := New("test")
 	c.BaseURL = s.URL
-	hits, err := c.Search(context.Background(), "test", "1.21.1", "neoforge", 20)
-	if err != nil || len(hits) != 1 || hits[0].ProjectID != "abc" {
-		t.Fatalf("%+v %v", hits, err)
+	result, err := c.Search(context.Background(), "test", "1.21.1", "neoforge", 20, 20)
+	if err != nil || len(result.Hits) != 1 || result.Hits[0].ProjectID != "abc" || result.Total != 37 {
+		t.Fatalf("%+v %v", result, err)
 	}
 }

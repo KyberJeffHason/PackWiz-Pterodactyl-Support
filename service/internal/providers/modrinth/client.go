@@ -24,6 +24,10 @@ type searchResponse struct {
 	Hits  []Hit `json:"hits"`
 	Total int   `json:"total_hits"`
 }
+type SearchResult struct {
+	Hits  []Hit
+	Total int
+}
 type Client struct {
 	HTTP               *http.Client
 	BaseURL, UserAgent string
@@ -32,9 +36,12 @@ type Client struct {
 func New(version string) *Client {
 	return &Client{HTTP: &http.Client{Timeout: 15 * time.Second}, BaseURL: "https://api.modrinth.com/v2", UserAgent: "packwiz-manager/" + version + " (https://github.com/packwiz-manager/packwiz-manager)"}
 }
-func (c *Client) Search(ctx context.Context, query, mc, loader string, limit int) ([]Hit, error) {
+func (c *Client) Search(ctx context.Context, query, mc, loader string, limit, offset int) (SearchResult, error) {
 	if limit < 1 || limit > 100 {
 		limit = 20
+	}
+	if offset < 0 {
+		offset = 0
 	}
 	facets, _ := json.Marshal([][]string{{"project_type:mod"}, {"versions:" + mc}, {"categories:" + loader}})
 	u, _ := url.Parse(c.BaseURL + "/search")
@@ -42,12 +49,13 @@ func (c *Client) Search(ctx context.Context, query, mc, loader string, limit int
 	q.Set("query", query)
 	q.Set("facets", string(facets))
 	q.Set("limit", strconv.Itoa(limit))
+	q.Set("offset", strconv.Itoa(offset))
 	u.RawQuery = q.Encode()
 	var out searchResponse
 	if err := c.get(ctx, u.String(), &out); err != nil {
-		return nil, err
+		return SearchResult{}, err
 	}
-	return out.Hits, nil
+	return SearchResult{Hits: out.Hits, Total: out.Total}, nil
 }
 func (c *Client) get(ctx context.Context, endpoint string, out any) error {
 	var last error

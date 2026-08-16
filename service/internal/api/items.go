@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"database/sql"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -21,16 +22,19 @@ import (
 var sideLine = regexp.MustCompile(`(?m)^side\s*=\s*"(?:client|server|both)"\s*$`)
 
 type item struct {
-	ID          string `json:"id"`
-	ProjectID   string `json:"project_id"`
-	Kind        string `json:"kind"`
-	Provider    string `json:"provider"`
-	DisplayName string `json:"display_name"`
-	TargetPath  string `json:"target_path"`
-	Filename    string `json:"filename"`
-	Side        string `json:"side"`
-	SHA256      string `json:"sha256,omitempty"`
-	Enabled     bool   `json:"enabled"`
+	ID                string         `json:"id"`
+	ProjectID         string         `json:"project_id"`
+	Kind              string         `json:"kind"`
+	Provider          string         `json:"provider"`
+	ProviderProjectID string         `json:"provider_project_id,omitempty"`
+	ProviderVersionID string         `json:"provider_version_id,omitempty"`
+	DisplayName       string         `json:"display_name"`
+	TargetPath        string         `json:"target_path"`
+	Filename          string         `json:"filename"`
+	Side              string         `json:"side"`
+	SHA256            string         `json:"sha256,omitempty"`
+	Metadata          map[string]any `json:"metadata,omitempty"`
+	Enabled           bool           `json:"enabled"`
 }
 
 func allowedTarget(target string) bool {
@@ -98,10 +102,15 @@ func nullable(v string) any {
 
 func scanItem(row interface{ Scan(...any) error }) (item, error) {
 	var v item
-	var hash sql.NullString
+	var providerProject, providerVersion, hash, metadata sql.NullString
 	var enabled int
-	err := row.Scan(&v.ID, &v.ProjectID, &v.Kind, &v.Provider, &v.DisplayName, &v.TargetPath, &v.Filename, &v.Side, &hash, &enabled)
+	err := row.Scan(&v.ID, &v.ProjectID, &v.Kind, &v.Provider, &providerProject, &providerVersion, &v.DisplayName, &v.TargetPath, &v.Filename, &v.Side, &hash, &metadata, &enabled)
+	v.ProviderProjectID = providerProject.String
+	v.ProviderVersionID = providerVersion.String
 	v.SHA256 = hash.String
+	if metadata.Valid && metadata.String != "" && metadata.String != "{}" {
+		_ = json.Unmarshal([]byte(metadata.String), &v.Metadata)
+	}
 	v.Enabled = enabled != 0
 	return v, err
 }

@@ -12,17 +12,85 @@ import (
 	"github.com/packwiz-manager/packwiz-manager/service/internal/security"
 )
 
+const itemColumns = `id,project_id,kind,provider,provider_project_id,provider_version_id,display_name,target_path,filename,side,expected_sha256,metadata_json,enabled`
+
 func (a *API) listItems(w http.ResponseWriter, r *http.Request) {
 	if !permission(w, r, "packwiz.read") {
 		return
 	}
-	rows, err := a.DB.QueryContext(r.Context(), `SELECT id,project_id,kind,provider,display_name,target_path,filename,side,expected_sha256,enabled FROM items WHERE project_id=? ORDER BY display_name`, r.PathValue("id"))
+
+	page, pageSize, offset := pageParams(r, 25, 100)
+	where := []string{"project_id=?"}
+	args := []any{r.PathValue("id")}
+
+	if query := strings.TrimSpace(r.URL.Query().Get("q")); query != "" {
+		where = append(where, `(display_name LIKE ? OR target_path LIKE ?)`)
+		like := "%" + query + "%"
+		args = append(args, like, like)
+	}
+
+	if provider := strings.TrimSpace(r.URL.Query().Get("provider")); provider != "" {
+		if !map[string]bool{"modrinth": true, "curseforge": true, "custom": true, "local": true, "url": true}[provider] {
+			bad(w, errors.New("invalid provider filter"))
+			return
+		}
+		where = append(where, "provider=?")
+		args = append(args, provider)
+	}
+
+	if side := strings.TrimSpace(r.URL.Query().Get("side")); side != "" {
+		if side != "client" && side != "server" && side != "both" {
+			bad(w, errors.New("invalid side filter"))
+			return
+		}
+		where = append(where, "side=?")
+		args = append(args, side)
+	}
+
+	switch r.URL.Query().Get("group") {
+	case "", "all":
+	case "mods":
+		where = append(where, `kind='mod' AND provider IN ('modrinth','curseforge')`)
+	case "custom":
+		where = append(where, `kind='mod' AND provider='custom'`)
+	case "files":
+		where = append(where, `kind<>'mod'`)
+	default:
+		bad(w, errors.New("invalid item group"))
+		return
+	}
+
+	whereSQL := strings.Join(where, " AND ")
+	var total int
+	if err := a.DB.QueryRowContext(r.Context(), `SELECT COUNT(*) FROM items WHERE `+whereSQL, args...).Scan(&total); err != nil {
+		respond(w, nil, err)
+		return
+	}
+	if total > 0 {
+		pages := (total + pageSize - 1) / pageSize
+		if page > pages {
+			page = pages
+			offset = (page - 1) * pageSize
+		}
+	}
+
+	order := map[string]string{"name": "display_name", "provider": "provider", "path": "target_path"}[r.URL.Query().Get("sort")]
+	if order == "" {
+		order = "display_name"
+	}
+	direction := "ASC"
+	if strings.EqualFold(r.URL.Query().Get("direction"), "desc") {
+		direction = "DESC"
+	}
+
+	queryArgs := append(append([]any{}, args...), pageSize, offset)
+	rows, err := a.DB.QueryContext(r.Context(), `SELECT `+itemColumns+` FROM items WHERE `+whereSQL+` ORDER BY `+order+` `+direction+`, id ASC LIMIT ? OFFSET ?`, queryArgs...)
 	if err != nil {
 		respond(w, nil, err)
 		return
 	}
 	defer rows.Close()
-	var out []item
+	out := make([]item, 0, pageSize)
 	for rows.Next() {
 		v, err := scanItem(rows)
 		if err != nil {
@@ -31,7 +99,11 @@ func (a *API) listItems(w http.ResponseWriter, r *http.Request) {
 		}
 		out = append(out, v)
 	}
-	respond(w, out, rows.Err())
+	if err = rows.Err(); err != nil {
+		respond(w, nil, err)
+		return
+	}
+	respond(w, map[string]any{"items": out, "total": total, "page": page, "page_size": pageSize}, nil)
 }
 
 func (a *API) updateItemSide(w http.ResponseWriter, r *http.Request) {
@@ -49,7 +121,7 @@ func (a *API) updateItemSide(w http.ResponseWriter, r *http.Request) {
 		bad(w, errors.New("invalid side"))
 		return
 	}
-	v, err := scanItem(a.DB.QueryRowContext(r.Context(), `SELECT id,project_id,kind,provider,display_name,target_path,filename,side,expected_sha256,enabled FROM items WHERE id=? AND project_id=?`, r.PathValue("item"), r.PathValue("id")))
+	v, err := scanItem(a.DB.QueryRowContext(r.Context(), `SELECT `+itemColumns+` FROM items WHERE id=? AND project_id=?`, r.PathValue("item"), r.PathValue("id")))
 	if err != nil {
 		respond(w, nil, err)
 		return
@@ -85,7 +157,7 @@ func (a *API) removeItem(w http.ResponseWriter, r *http.Request) {
 	if !permission(w, r, "packwiz.edit") {
 		return
 	}
-	v, err := scanItem(a.DB.QueryRowContext(r.Context(), `SELECT id,project_id,kind,provider,display_name,target_path,filename,side,expected_sha256,enabled FROM items WHERE id=? AND project_id=?`, r.PathValue("item"), r.PathValue("id")))
+	v, err := scanItem(a.DB.QueryRowContext(r.Context(), `SELECT `+itemColumns+` FROM items WHERE id=? AND project_id=?`, r.PathValue("item"), r.PathValue("id")))
 	if err != nil {
 		respond(w, nil, err)
 		return

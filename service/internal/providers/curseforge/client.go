@@ -12,18 +12,30 @@ import (
 )
 
 type Mod struct {
-	ID   int    `json:"id"`
-	Name string `json:"name"`
-	Slug string `json:"slug"`
-	Logo struct {
+	ID      int    `json:"id"`
+	Name    string `json:"name"`
+	Slug    string `json:"slug"`
+	Summary string `json:"summary"`
+	Logo    struct {
 		ThumbnailURL string `json:"thumbnailUrl"`
 	} `json:"logo"`
 	Authors []struct {
 		Name string `json:"name"`
 	} `json:"authors"`
 }
+type pagination struct {
+	Index       int `json:"index"`
+	PageSize    int `json:"pageSize"`
+	ResultCount int `json:"resultCount"`
+	TotalCount  int `json:"totalCount"`
+}
 type response struct {
-	Data []Mod `json:"data"`
+	Data       []Mod      `json:"data"`
+	Pagination pagination `json:"pagination"`
+}
+type SearchResult struct {
+	Mods  []Mod
+	Total int
 }
 type Client struct {
 	HTTP            *http.Client
@@ -33,12 +45,15 @@ type Client struct {
 func New(key string) *Client {
 	return &Client{HTTP: &http.Client{Timeout: 15 * time.Second}, BaseURL: "https://api.curseforge.com/v1", APIKey: key}
 }
-func (c *Client) Search(ctx context.Context, query, mc, loader string, classID, pageSize int) ([]Mod, error) {
+func (c *Client) Search(ctx context.Context, query, mc, loader string, classID, pageSize, index int) (SearchResult, error) {
 	if c.APIKey == "" {
-		return nil, errors.New("CurseForge is not configured")
+		return SearchResult{}, errors.New("CurseForge is not configured")
 	}
 	if pageSize < 1 || pageSize > 50 {
 		pageSize = 20
+	}
+	if index < 0 {
+		index = 0
 	}
 	u, _ := url.Parse(c.BaseURL + "/mods/search")
 	q := u.Query()
@@ -50,19 +65,26 @@ func (c *Client) Search(ctx context.Context, query, mc, loader string, classID, 
 		q.Set("modLoaderType", kind)
 	}
 	q.Set("pageSize", strconv.Itoa(pageSize))
+	q.Set("index", strconv.Itoa(index))
 	u.RawQuery = q.Encode()
 	req, _ := http.NewRequestWithContext(ctx, "GET", u.String(), nil)
 	req.Header.Set("x-api-key", c.APIKey)
 	req.Header.Set("Accept", "application/json")
 	res, err := c.HTTP.Do(req)
 	if err != nil {
-		return nil, err
+		return SearchResult{}, err
 	}
 	defer res.Body.Close()
 	if res.StatusCode != 200 {
-		return nil, fmt.Errorf("CurseForge status %d", res.StatusCode)
+		return SearchResult{}, fmt.Errorf("CurseForge status %d", res.StatusCode)
 	}
 	var out response
-	err = json.NewDecoder(res.Body).Decode(&out)
-	return out.Data, err
+	if err = json.NewDecoder(res.Body).Decode(&out); err != nil {
+		return SearchResult{}, err
+	}
+	total := out.Pagination.TotalCount
+	if total == 0 && len(out.Data) > 0 {
+		total = len(out.Data)
+	}
+	return SearchResult{Mods: out.Data, Total: total}, nil
 }
