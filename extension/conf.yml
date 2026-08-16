@@ -2,7 +2,7 @@ info:
   name: 'Packwiz Manager'
   identifier: 'packwizmanager'
   description: 'Manage and publish Packwiz projects from Pterodactyl.'
-  version: '0.2.4'
+  version: '0.2.5'
   target: 'beta-2026-08'
   author: 'Packwiz Manager contributors'
   website: 'https://github.com/packwiz-manager/packwiz-manager'
