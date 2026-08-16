@@ -46,9 +46,52 @@ class PackwizProxyController extends Controller
         return response($response->body(), $response->status())->header('Content-Type', 'application/json');
     }
 
-    public function projects(Request $request, Server $server): Response { $this->authorizeServer($request, $server); return $this->relay($this->service($request, 'packwiz.read')->get('/projects')); }
+    private function projectCookie(Server $server): string
+    {
+        return 'packwiz_project_'.str_replace('-', '_', $server->uuid);
+    }
+
+    public function projects(Request $request, Server $server): Response
+    {
+        $this->authorizeServer($request, $server);
+        $upstream = $this->service($request, 'packwiz.read')->get('/projects');
+        if (!$upstream->successful()) {
+            return $this->relay($upstream);
+        }
+        $projects = $upstream->json();
+        $selected = (string) $request->cookie($this->projectCookie($server), '');
+        if ($selected !== '' && is_array($projects)) {
+            usort($projects, static function ($a, $b) use ($selected) {
+                $aSelected = (($a['id'] ?? '') === $selected) ? 0 : 1;
+                $bSelected = (($b['id'] ?? '') === $selected) ? 0 : 1;
+                return $aSelected <=> $bSelected;
+            });
+        }
+        return response()->json($projects, $upstream->status());
+    }
+
     public function create(Request $request, Server $server): Response { $this->authorizeServer($request, $server); return $this->relay($this->service($request, 'packwiz.edit')->post('/projects', $request->json()->all())); }
-    public function importProject(Request $request, Server $server): Response { $this->authorizeServer($request,$server);$request->validate(['archive'=>'required|file','slug'=>'required|string','display_name'=>'required|string','minecraft_version'=>'required|string','loader'=>'required|string','loader_version'=>'required|string','pack_version'=>'required|string']);$file=$request->file('archive');return $this->relay($this->service($request,'packwiz.edit')->attach('archive',fopen($file->getRealPath(),'rb'),$file->getClientOriginalName())->post('/projects/import',$request->only(['slug','display_name','minecraft_version','loader','loader_version','pack_version']))); }
+    public function importProject(Request $request, Server $server): Response
+    {
+        $this->authorizeServer($request, $server);
+        $request->validate([
+            'archive' => 'required|file',
+            'replace_project_id' => 'nullable|string',
+            'slug' => 'required_without:replace_project_id|nullable|string',
+            'display_name' => 'required|string',
+            'minecraft_version' => 'required|string',
+            'loader' => 'required|string',
+            'loader_version' => 'required|string',
+            'pack_version' => 'required|string',
+        ]);
+        $file = $request->file('archive');
+        $fields = $request->only(['slug', 'display_name', 'minecraft_version', 'loader', 'loader_version', 'pack_version', 'replace_project_id']);
+        return $this->relay(
+            $this->service($request, 'packwiz.edit')
+                ->attach('archive', fopen($file->getRealPath(), 'rb'), $file->getClientOriginalName())
+                ->post('/projects/import', $fields)
+        );
+    }
     public function publish(Request $request, Server $server, string $project): Response { $this->authorizeServer($request, $server); return $this->relay($this->service($request, 'packwiz.publish')->post("/projects/{$project}/publish", $request->json()->all())); }
     public function revisions(Request $request, Server $server, string $project): Response { $this->authorizeServer($request, $server); return $this->relay($this->service($request, 'packwiz.read')->get("/projects/{$project}/revisions")); }
     public function diff(Request $request, Server $server, string $project): Response { $this->authorizeServer($request, $server); return $this->relay($this->service($request, 'packwiz.read')->get("/projects/{$project}/revisions/diff", $request->query())); }
