@@ -86,17 +86,30 @@ class PackwizIntegrationController extends Controller
         abort_if((string) $this->blueprint->dbGet('packwizmanager', $key, '') !== '', 409, 'Integration is already installed.');
         $this->requireOffline($model);
         $repo = $this->files->setServer($model);
-        $repo->pull(self::BOOTSTRAP_URL, '/', ['filename' => 'packwiz-installer-bootstrap.jar', 'foreground' => true]);
-        $jar = $repo->getContent('/packwiz-installer-bootstrap.jar', 200000);
-        if (!hash_equals(self::BOOTSTRAP_SHA256, hash('sha256', $jar))) {
-            $repo->deleteFiles('/', ['packwiz-installer-bootstrap.jar']);
-            abort(502, 'Bootstrap checksum mismatch.');
-        }
+
+        // Wings intentionally does not follow remote-download redirects. GitHub
+        // release assets redirect to their asset CDN, so download the pinned
+        // bootstrap through the Panel, verify it, then upload the bytes to Wings.
+        $bootstrap = Http::timeout(60)
+            ->withOptions(['allow_redirects' => true])
+            ->get(self::BOOTSTRAP_URL);
+
+        abort_unless($bootstrap->successful(), 502, 'Failed to download Packwiz bootstrap.');
+
+        $jar = $bootstrap->body();
+        abort_if(strlen($jar) > 200000, 502, 'Packwiz bootstrap exceeded expected size.');
+        abort_unless(
+            hash_equals(self::BOOTSTRAP_SHA256, hash('sha256', $jar)),
+            502,
+            'Bootstrap checksum mismatch.'
+        );
+
+        $repo->putContent('/packwiz-installer-bootstrap.jar', $jar);
         $old = str_replace(["\r", "\n"], ' ', $model->startup);
         $url = str_replace("'", "'\"'\"'", $plan['pack_url']);
         $script = "#!/usr/bin/env bash\nset -Eeuo pipefail\njava -jar packwiz-installer-bootstrap.jar -g -s server '{$url}'\nexec {$old}\n";
         $repo->putContent('/packwiz-start.sh', $script);
-        $repo->chmodFiles('/', [['file' => 'packwiz-start.sh', 'mode' => 755]]);
+        $repo->chmodFiles('/', [['file' => 'packwiz-start.sh', 'mode' => '755']]);
         $this->blueprint->dbSet('packwizmanager', $key, $model->startup);
         $applied = false;
         try {
