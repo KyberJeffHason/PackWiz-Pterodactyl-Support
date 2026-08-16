@@ -13,7 +13,7 @@ func TestPublicHandlerRejectsTraversalAndMutation(t *testing.T) {
 	for _, tc := range []struct {
 		method, path string
 		want         int
-	}{{"POST", "/pack/pack.toml", 405}, {"GET", "/../secret", 404}, {"GET", "/pack/%2e%2e/secret", 404}} {
+	}{{"POST", "/pack/pack.toml", 405}, {"GET", "/../secret", 404}, {"GET", "/pack/%2e%2e/secret", 404}, {"GET", "/pack/%5csecret", 404}} {
 		w := httptest.NewRecorder()
 		h.ServeHTTP(w, httptest.NewRequest(tc.method, tc.path, nil))
 		if w.Code != tc.want {
@@ -39,6 +39,29 @@ func TestPublicHandlerServesStableAndRange(t *testing.T) {
 	w := httptest.NewRecorder()
 	PublicHandler(releases, blobs).ServeHTTP(w, r)
 	if w.Code != http.StatusPartialContent || w.Body.String() != "bc" {
+		t.Fatalf("code=%d body=%q", w.Code, w.Body.String())
+	}
+}
+
+func TestPublicHandlerServesEncodedFilenameWithSpacesAndParentheses(t *testing.T) {
+	releases, blobs := t.TempDir(), t.TempDir()
+	revision := filepath.Join(releases, "kyberland", "releases", "1")
+	dir := filepath.Join(revision, "config", "CSC", "backup", "Pinkar_")
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	filename := "2026_08_04_22_16qw-t_43_a (2).nbt"
+	if err := os.WriteFile(filepath.Join(dir, filename), []byte("nbt-data"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(filepath.Join("releases", "1"), filepath.Join(releases, "kyberland", "current")); err != nil {
+		t.Skipf("symlink unavailable: %v", err)
+	}
+
+	r := httptest.NewRequest(http.MethodGet, "/kyberland/config/CSC/backup/Pinkar_/2026_08_04_22_16qw-t_43_a%20(2).nbt", nil)
+	w := httptest.NewRecorder()
+	PublicHandler(releases, blobs).ServeHTTP(w, r)
+	if w.Code != http.StatusOK || w.Body.String() != "nbt-data" {
 		t.Fatalf("code=%d body=%q", w.Code, w.Body.String())
 	}
 }
