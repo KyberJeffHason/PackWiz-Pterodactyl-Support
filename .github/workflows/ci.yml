@@ -18,7 +18,7 @@ jobs:
       - uses: actions/checkout@v4
       - run: sudo apt-get update && sudo apt-get install -y shellcheck php-cli
       - run: shellcheck installer/*.sh scripts/*.sh tests/e2e/*.sh && bash -n installer/*.sh scripts/*.sh tests/e2e/*.sh
-      - run: cp -a extension /tmp/extension-lint && grep -rl '{appcontext}' /tmp/extension-lint | xargs sed -i 's/{appcontext}/Pterodactyl\\BlueprintFramework\\Extensions\\packwizmanager/g' && find /tmp/extension-lint -name '*.php' -print0 | xargs -0 -n1 php -l
+      - run: cp -a extension /tmp/extension-lint && grep -rlZ '{appcontext}' /tmp/extension-lint | xargs -0 -r sed -i 's/{appcontext}/Pterodactyl\\BlueprintFramework\\Extensions\\packwizmanager/g' && find /tmp/extension-lint -name '*.php' -print0 | xargs -0 -n1 php -l
       - run: bash scripts/build-blueprint.sh dist
       - uses: actions/upload-artifact@v4
         with: { name: blueprint-extension, path: dist/packwizmanager.blueprint }
