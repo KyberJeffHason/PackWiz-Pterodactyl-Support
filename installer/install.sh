@@ -19,7 +19,12 @@ install -d -o root -g packwizmgr -m 0750 /etc/packwiz-manager;install -d -o pack
 install -m 0755 "$TMP/packwiz-manager" /usr/local/bin/packwiz-manager;install -m 0755 "$TMP/packwiz" /usr/lib/packwiz-manager/packwiz
 if [[ ! -f /etc/packwiz-manager/service.token ]];then (umask 077;openssl rand -hex 32 >/etc/packwiz-manager/service.token);fi
 TOKEN="$(</etc/packwiz-manager/service.token)";if [[ ! -f /etc/packwiz-manager/config.env ]];then { echo "PWM_SERVICE_TOKEN=$TOKEN";echo "PWM_LISTEN=127.0.0.1:8090";echo "PWM_PUBLIC_LISTEN=127.0.0.1:8091";echo "PWM_DATA_DIR=/srv/packwiz-manager";echo "PWM_PUBLIC_BASE_URL=${PACK_HOST:-http://127.0.0.1:8091/public}";echo "PWM_PACKWIZ_COMMIT=$(<"$TMP/PACKWIZ_REF")";} >/etc/packwiz-manager/config.env;chmod 0600 /etc/packwiz-manager/config.env;fi
-install -m 0644 "$TMP/packwiz-manager.service" /etc/systemd/system/packwiz-manager.service;systemctl daemon-reload;systemctl enable --now packwiz-manager
+install -m 0644 "$TMP/packwiz-manager.service" /etc/systemd/system/packwiz-manager.service
+systemctl daemon-reload
+systemctl enable packwiz-manager
+# Always restart after replacing the executable. `enable --now` only starts an
+# inactive service and leaves an already-running old binary in memory.
+systemctl restart packwiz-manager
 for _ in {1..30};do curl -fsS http://127.0.0.1:8090/readyz >/dev/null&&break;sleep 1;done;curl -fsS http://127.0.0.1:8090/healthz >/dev/null;curl -fsS http://127.0.0.1:8090/readyz >/dev/null
 if ((CONFIGURE_CLOUDFLARE));then bash "$TMP/cloudflare.sh";fi
 ((SERVICE_ONLY))&&exit 0
