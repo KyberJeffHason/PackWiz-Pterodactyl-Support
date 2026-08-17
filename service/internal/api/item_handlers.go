@@ -18,6 +18,10 @@ func (a *API) listItems(w http.ResponseWriter, r *http.Request) {
 	if !permission(w, r, "packwiz.read") {
 		return
 	}
+	if r.URL.Query().Get("view") == "tree" {
+		a.listFileTree(w, r, r.URL.Query().Get("path"))
+		return
+	}
 
 	page, pageSize, offset := pageParams(r, 25, 100)
 	where := []string{"project_id=?"}
