@@ -4,11 +4,13 @@ use Illuminate\Support\Facades\Route;
 use Pterodactyl\BlueprintFramework\Extensions\packwizmanager\PackwizProxyController;
 use Pterodactyl\BlueprintFramework\Extensions\packwizmanager\PackwizIntegrationController;
 use Pterodactyl\BlueprintFramework\Extensions\packwizmanager\PackwizClientExportController;
+use Pterodactyl\BlueprintFramework\Extensions\packwizmanager\PackwizFileController;
 
 Route::get('/servers/{server}/projects', [PackwizProxyController::class, 'projects']);
 Route::post('/servers/{server}/projects', [PackwizProxyController::class, 'create']);
 Route::post('/servers/{server}/projects/import', [PackwizProxyController::class, 'importProject']);
 Route::get('/servers/{server}/projects/{project}/client-export', [PackwizClientExportController::class, 'export']);
+Route::get('/servers/{server}/projects/{project}/files/download', [PackwizFileController::class, 'download']);
 Route::post('/servers/{server}/projects/{project}/publish', [PackwizProxyController::class, 'publish']);
 Route::get('/servers/{server}/projects/{project}/revisions', [PackwizProxyController::class, 'revisions']);
 Route::get('/servers/{server}/projects/{project}/revisions/diff', [PackwizProxyController::class, 'diff']);

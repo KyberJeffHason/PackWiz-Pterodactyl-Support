@@ -15,11 +15,23 @@ import (
 const itemColumns = `id,project_id,kind,provider,provider_project_id,provider_version_id,display_name,target_path,filename,side,expected_sha256,metadata_json,enabled`
 
 func (a *API) listItems(w http.ResponseWriter, r *http.Request) {
-	if !permission(w, r, "packwiz.read") {
+	view := r.URL.Query().Get("view")
+	if view == "tree" {
+		if !permission(w, r, "packwiz.read") {
+			return
+		}
+		a.listFileTree(w, r, r.URL.Query().Get("path"))
 		return
 	}
-	if r.URL.Query().Get("view") == "tree" {
-		a.listFileTree(w, r, r.URL.Query().Get("path"))
+	if view == "content" {
+		a.readManagedFileContent(w, r, r.URL.Query().Get("path"))
+		return
+	}
+	if view == "download" {
+		a.downloadManagedFile(w, r, r.URL.Query().Get("path"))
+		return
+	}
+	if !permission(w, r, "packwiz.read") {
 		return
 	}
 

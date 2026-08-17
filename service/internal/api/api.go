@@ -323,16 +323,42 @@ func (a *API) uploadFile(w http.ResponseWriter, r *http.Request) {
 	digest := hex.EncodeToString(sum[:])
 	now := time.Now().UTC().Format(time.RFC3339Nano)
 	id := projects.ID()
+	kind := "file"
+	side := "both"
 	tx, err := a.DB.BeginTx(r.Context(), nil)
 	if err != nil {
 		respond(w, nil, err)
 		return
 	}
 	defer tx.Rollback()
-	if _, err = tx.ExecContext(r.Context(), `INSERT INTO items(id,project_id,kind,provider,display_name,target_path,filename,side,expected_sha256,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?)`, id, r.PathValue("id"), "file", "local", path.Base(target), target, path.Base(target), "both", digest, now, now); err != nil {
+
+	var existingID, existingKind, existingSide string
+	err = tx.QueryRowContext(r.Context(), `SELECT id,kind,side FROM items WHERE project_id=? AND target_path=? AND kind<>'mod' ORDER BY created_at ASC LIMIT 1`, r.PathValue("id"), target).Scan(&existingID, &existingKind, &existingSide)
+	switch {
+	case err == nil:
+		id = existingID
+		if existingKind != "" {
+			kind = existingKind
+		}
+		if existingSide == "client" || existingSide == "server" || existingSide == "both" {
+			side = existingSide
+		}
+		if _, err = tx.ExecContext(r.Context(), `DELETE FROM items WHERE project_id=? AND target_path=? AND kind<>'mod' AND id<>?`, r.PathValue("id"), target, id); err != nil {
+			respond(w, nil, err)
+			return
+		}
+		_, err = tx.ExecContext(r.Context(), `UPDATE items SET kind=?,provider='local',display_name=?,filename=?,side=?,expected_sha256=?,source_url=NULL,updated_at=? WHERE id=?`, kind, path.Base(target), path.Base(target), side, digest, now, id)
+	case errors.Is(err, sql.ErrNoRows):
+		_, err = tx.ExecContext(r.Context(), `INSERT INTO items(id,project_id,kind,provider,display_name,target_path,filename,side,expected_sha256,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?)`, id, r.PathValue("id"), kind, "local", path.Base(target), target, path.Base(target), side, digest, now, now)
+	default:
 		respond(w, nil, err)
 		return
 	}
+	if err != nil {
+		respond(w, nil, err)
+		return
+	}
+
 	err = a.Projects.MutateAndCommit(r.Context(), r.PathValue("id"), func(p projects.Project) error {
 		name, err := security.SafeJoin(p.WorkingDirectory, target)
 		if err != nil {
