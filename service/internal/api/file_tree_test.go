@@ -4,11 +4,13 @@ import "testing"
 
 func TestNormalizeManagedTreePath(t *testing.T) {
 	valid := map[string]string{
-		"":                      "",
-		"config":                "config",
-		"config/client.toml":    "config/client.toml",
-		"defaultconfigs/test":   "defaultconfigs/test",
-		"kubejs/server_scripts": "kubejs/server_scripts",
+		"":                              "",
+		"config":                        "config",
+		"config/client+extra.toml":      "config/client+extra.toml",
+		"defaultconfigs/test":           "defaultconfigs/test",
+		"kubejs/server_scripts":         "kubejs/server_scripts",
+		"client-files":                  "client-files",
+		"client-files/servers+prod.dat": "client-files/servers+prod.dat",
 	}
 	for input, expected := range valid {
 		actual, err := normalizeManagedTreePath(input)

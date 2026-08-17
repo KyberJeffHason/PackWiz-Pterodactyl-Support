@@ -24,6 +24,23 @@ func (a *API) resolveManagedFile(r *http.Request, requested string) (string, str
 	if rel == "" {
 		return "", "", nil, errors.New("file path required")
 	}
+	if _, isClient, clientErr := clientFileName(rel); isClient {
+		if clientErr != nil {
+			return "", "", nil, clientErr
+		}
+		name, err := a.clientFileBlobPath(r.Context(), r.PathValue("id"), rel)
+		if err != nil {
+			return "", "", nil, err
+		}
+		info, err := os.Lstat(name)
+		if err != nil {
+			return "", "", nil, err
+		}
+		if info.Mode()&os.ModeSymlink != 0 || !info.Mode().IsRegular() {
+			return "", "", nil, errors.New("path is not a regular managed file")
+		}
+		return rel, name, info, nil
+	}
 	project, err := a.Projects.Get(r.Context(), r.PathValue("id"))
 	if err != nil {
 		return "", "", nil, err

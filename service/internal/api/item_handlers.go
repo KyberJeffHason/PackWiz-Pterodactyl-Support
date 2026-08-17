@@ -46,7 +46,7 @@ func (a *API) listItems(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if provider := strings.TrimSpace(r.URL.Query().Get("provider")); provider != "" {
-		if !map[string]bool{"modrinth": true, "curseforge": true, "custom": true, "local": true, "url": true}[provider] {
+		if !map[string]bool{"modrinth": true, "curseforge": true, "custom": true, "local": true, "url": true, "client-file": true}[provider] {
 			bad(w, errors.New("invalid provider filter"))
 			return
 		}
@@ -142,6 +142,10 @@ func (a *API) updateItemSide(w http.ResponseWriter, r *http.Request) {
 		respond(w, nil, err)
 		return
 	}
+	if v.Provider == "client-file" {
+		bad(w, errors.New("client root files are always client-side"))
+		return
+	}
 	if v.Provider == "local" || v.Provider == "url" {
 		bad(w, errors.New("side applies only to Packwiz metadata entries"))
 		return
@@ -181,6 +185,16 @@ func (a *API) removeItem(w http.ResponseWriter, r *http.Request) {
 	target := v.TargetPath
 	if v.Provider == "custom" {
 		target = strings.TrimSuffix(target, ".jar") + ".pw.toml"
+	} else if v.Provider == "client-file" {
+		filename, isClient, targetErr := clientFileName(v.TargetPath)
+		if targetErr != nil || !isClient {
+			if targetErr == nil {
+				targetErr = errors.New("invalid client file target")
+			}
+			bad(w, targetErr)
+			return
+		}
+		target = clientFileMetadataPath(filename)
 	}
 	tx, err := a.DB.BeginTx(r.Context(), nil)
 	if err != nil {

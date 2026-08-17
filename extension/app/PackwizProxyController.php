@@ -104,13 +104,13 @@ class PackwizProxyController extends Controller
     public function search(Request $request, Server $server, string $provider): Response { $this->authorizeServer($request, $server); abort_unless(in_array($provider, ['modrinth', 'curseforge'], true), 404); return $this->relay($this->service($request, 'packwiz.read')->get("/providers/{$provider}/search", $request->query())); }
     public function upload(Request $request, Server $server, string $project): Response
     {
-        $this->authorizeServer($request, $server); $request->validate(['file' => 'required|file', 'display_name' => 'required|string|max:128', 'side' => 'required|in:client,server,both', 'destination' => ['required', 'regex:/^mods\/[A-Za-z0-9._-]+\.jar$/']]);
+        $this->authorizeServer($request, $server); $request->validate(['file' => 'required|file', 'display_name' => 'required|string|max:128', 'side' => 'required|in:client,server,both', 'destination' => ['required', 'regex:/^mods\/[A-Za-z0-9._+-]+\.jar$/']]);
         $file = $request->file('file'); $pending = $this->service($request, 'packwiz.upload')->attach('file', fopen($file->getRealPath(), 'rb'), $file->getClientOriginalName());
         return $this->relay($pending->post("/projects/{$project}/custom-jars", $request->only(['display_name', 'side', 'destination'])));
     }
     public function uploadFile(Request $request, Server $server, string $project): Response
     {
-        $this->authorizeServer($request, $server); $request->validate(['file' => 'required|file', 'target_path' => ['required', 'regex:/^(config|defaultconfigs|kubejs|datapacks|resourcepacks)\/[A-Za-z0-9._\/-]+$/']]); $file=$request->file('file');
+        $this->authorizeServer($request, $server); $request->validate(['file' => 'required|file', 'target_path' => ['required', 'regex:/^(?:(?:config|defaultconfigs|kubejs|datapacks|resourcepacks)\/[A-Za-z0-9._+\/-]+|client-files\/[A-Za-z0-9._+-]+)$/']]); $file=$request->file('file');
         return $this->relay($this->service($request, 'packwiz.upload')->attach('file', fopen($file->getRealPath(), 'rb'), $file->getClientOriginalName())->post("/projects/{$project}/files", ['target_path'=>$request->input('target_path')]));
     }
     public function importUrl(Request $request,Server $server,string $project):Response{$this->authorizeServer($request,$server);$request->validate(['url'=>'required|url','target_path'=>'required|string','display_name'=>'required|string','kind'=>'required|in:file,config,kubejs,datapack,resourcepack','side'=>'required|in:client,server,both']);return $this->relay($this->service($request,'packwiz.upload')->post("/projects/{$project}/url-imports",$request->only(['url','target_path','display_name','kind','side'])));}

@@ -11,7 +11,7 @@ import (
 	"github.com/packwiz-manager/packwiz-manager/service/internal/security"
 )
 
-var managedFileRoots = []string{"config", "defaultconfigs", "kubejs", "datapacks", "resourcepacks"}
+var managedFileRoots = []string{"config", "defaultconfigs", "kubejs", "datapacks", "resourcepacks", clientFilesRoot}
 
 type fileTreeManagedItem struct {
 	ID       string
@@ -106,8 +106,19 @@ func (a *API) listFileTree(w http.ResponseWriter, r *http.Request, requested str
 	if rel == "" {
 		out := make([]fileTreeEntry, 0, len(managedFileRoots))
 		for _, root := range managedFileRoots {
-			name := filepath.Join(project.WorkingDirectory, root)
 			entry := fileTreeEntry{Name: root, Path: root, Type: "directory"}
+			if root == clientFilesRoot {
+				count, countErr := a.clientFileCount(r.Context(), project.ID)
+				if countErr != nil {
+					respond(w, nil, countErr)
+					return
+				}
+				entry.Exists = count > 0
+				entry.Children = count
+				out = append(out, entry)
+				continue
+			}
+			name := filepath.Join(project.WorkingDirectory, root)
 			info, statErr := os.Lstat(name)
 			switch {
 			case statErr == nil && info.Mode()&os.ModeSymlink == 0 && info.IsDir():
@@ -121,6 +132,16 @@ func (a *API) listFileTree(w http.ResponseWriter, r *http.Request, requested str
 			out = append(out, entry)
 		}
 		respond(w, map[string]any{"path": "", "entries": out}, nil)
+		return
+	}
+
+	if rel == clientFilesRoot {
+		entries, listErr := a.clientFileTree(r.Context(), project.ID)
+		respond(w, map[string]any{"path": rel, "entries": entries}, listErr)
+		return
+	}
+	if strings.HasPrefix(rel, clientFilesRoot+"/") {
+		bad(w, errors.New("client-files contains root files only and has no subdirectories"))
 		return
 	}
 

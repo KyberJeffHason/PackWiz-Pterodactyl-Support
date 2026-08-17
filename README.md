@@ -44,7 +44,9 @@ Open `/server/<identifier>/packwiz`; create project; choose Minecraft/loader; se
 
 Existing Packwiz ZIPs can be imported with a root `pack.toml` (a single wrapper directory is also accepted). The Files tab accepts uploads or HTTP/HTTPS URL imports into the configured path allowlist. URL fetches enforce DNS/IP SSRF checks, redirect/time/size caps, and never forward service credentials. Installed Packwiz items can change client/server/both side or be removed; Settings edits pack name/version and Minecraft/loader metadata transactionally.
 
-Custom JAR tab accepts ZIP-valid `.jar`, streams SHA-256, stores content-addressed blob, and creates Packwiz metadata. **Custom JARs execute Minecraft code. Trust source.** Choose client/server/both and `mods/` destination.
+The Files tab also exposes a virtual `client-files/` root for client-only files that must land at the Minecraft instance root, such as `servers.dat`. Client files are stored as content-addressed blobs and represented by client-side Packwiz metadata; `client-files/servers.dat` therefore installs as `servers.dat`, not as a literal `client-files/` directory. Client root files are flat by design and do not support subdirectories.
+
+Custom JAR tab accepts ZIP-valid `.jar`, streams SHA-256, stores content-addressed blob, and creates Packwiz metadata. **Custom JARs execute Minecraft code. Trust source.** Custom Uploads are restricted to JARs directly under `mods/`; use Files for locations such as `config/bluemap/packs`. Choose client/server/both for the mod side.
 
 Publish runs `packwiz refresh`, stages regular files, hashes manifest, promotes immutable revision, and changes stable current pointer. Rollback selects old immutable revision. Stable URL: `https://pack.example.com/public/<slug>/pack.toml`.
 

@@ -128,8 +128,8 @@ func (a *API) uploadJAR(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	destination, err := security.SafeRelative(r.FormValue("destination"))
-	if err != nil || !strings.HasPrefix(destination, "mods/") || !strings.HasSuffix(strings.ToLower(destination), ".jar") {
-		bad(w, errors.New("custom JAR destination must be under mods/"))
+	if err != nil || path.Dir(destination) != "mods" || !strings.HasSuffix(strings.ToLower(destination), ".jar") {
+		bad(w, errors.New("custom JAR destination must be directly under mods/"))
 		return
 	}
 	file, header, err := r.FormFile("file")
@@ -298,13 +298,12 @@ func (a *API) uploadFile(w http.ResponseWriter, r *http.Request) {
 		bad(w, err)
 		return
 	}
-	allowed := false
-	for _, prefix := range []string{"config/", "defaultconfigs/", "kubejs/", "datapacks/", "resourcepacks/"} {
-		if strings.HasPrefix(target, prefix) {
-			allowed = true
-		}
+	clientName, isClientFile, clientErr := clientFileName(target)
+	if clientErr != nil {
+		bad(w, clientErr)
+		return
 	}
-	if !allowed {
+	if !isClientFile && !allowedTarget(target) {
 		bad(w, errors.New("target path is outside configured allowlist"))
 		return
 	}
@@ -317,6 +316,11 @@ func (a *API) uploadFile(w http.ResponseWriter, r *http.Request) {
 	content, err := io.ReadAll(io.LimitReader(file, a.Blobs.MaxBytes+1))
 	if err != nil || int64(len(content)) > a.Blobs.MaxBytes {
 		bad(w, errors.New("file exceeds configured limit"))
+		return
+	}
+	if isClientFile {
+		id, digest, storeErr := a.storeClientFile(r.Context(), r.PathValue("id"), target, clientName, content)
+		respond(w, map[string]any{"id": id, "target_path": target, "filename": clientName, "sha256": digest}, storeErr)
 		return
 	}
 	sum := sha256.Sum256(content)
