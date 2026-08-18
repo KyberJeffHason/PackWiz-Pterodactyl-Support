@@ -174,6 +174,10 @@ func (a *API) updateItemSide(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *API) removeItem(w http.ResponseWriter, r *http.Request) {
+	if r.PathValue("item") == "bulk" {
+		a.removeFileItems(w, r)
+		return
+	}
 	if !permission(w, r, "packwiz.edit") {
 		return
 	}
