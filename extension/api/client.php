@@ -17,6 +17,7 @@ Route::get('/servers/{server}/projects/{project}/revisions/diff', [PackwizProxyC
 Route::post('/servers/{server}/projects/{project}/rollback/{revision}', [PackwizProxyController::class, 'rollback']);
 Route::post('/servers/{server}/projects/{project}/custom-jars', [PackwizProxyController::class, 'upload']);
 Route::post('/servers/{server}/projects/{project}/files', [PackwizProxyController::class, 'uploadFile']);
+Route::delete('/servers/{server}/projects/{project}/folders', [PackwizProxyController::class, 'removeFolder']);
 Route::post('/servers/{server}/projects/{project}/url-imports', [PackwizProxyController::class, 'importUrl']);
 Route::post('/servers/{server}/projects/{project}/mods', [PackwizProxyController::class, 'addMod']);
 Route::get('/servers/{server}/projects/{project}/items', [PackwizProxyController::class, 'items']);

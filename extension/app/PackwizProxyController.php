@@ -98,7 +98,18 @@ class PackwizProxyController extends Controller
     public function addMod(Request $request, Server $server, string $project): Response { $this->authorizeServer($request, $server); $request->validate(['provider' => 'required|in:modrinth,curseforge', 'project_id' => 'required|string', 'version_id' => 'nullable|string', 'display_name' => 'required|string|max:128', 'side' => 'required|in:client,server,both', 'icon_url' => 'nullable|url|max:2048', 'author' => 'nullable|string|max:200']); return $this->relay($this->service($request, 'packwiz.edit')->post("/projects/{$project}/mods", $request->only(['provider', 'project_id', 'version_id', 'display_name', 'side', 'icon_url', 'author']))); }
     public function items(Request $request,Server $server,string $project):Response{$this->authorizeServer($request,$server);return $this->relay($this->service($request,'packwiz.read')->get("/projects/{$project}/items",$request->query()));}
     public function itemSide(Request $request,Server $server,string $project,string $item):Response{$this->authorizeServer($request,$server);$request->validate(['side'=>'required|in:client,server,both']);return $this->relay($this->service($request,'packwiz.edit')->patch("/projects/{$project}/items/{$item}/side",$request->only('side')));}
-    public function removeItem(Request $request,Server $server,string $project,string $item):Response{$this->authorizeServer($request,$server);return $this->relay($this->service($request,'packwiz.edit')->delete("/projects/{$project}/items/{$item}"));}
+    public function removeItem(Request $request, Server $server, string $project, string $item): Response
+    {
+        $this->authorizeServer($request, $server);
+        if ($item === 'bulk') {
+            $request->validate(['ids' => 'required|array|min:1|max:500', 'ids.*' => 'required|string|max:128']);
+            return $this->relay($this->service($request, 'packwiz.edit')->send('DELETE', "/projects/{$project}/items/bulk", [
+                'json' => ['ids' => array_values($request->input('ids'))],
+            ]));
+        }
+        return $this->relay($this->service($request, 'packwiz.edit')->delete("/projects/{$project}/items/{$item}"));
+    }
+    public function removeFolder(Request $request,Server $server,string $project):Response{$this->authorizeServer($request,$server);$request->validate(['path'=>'required|string|max:4096']);$path=(string)$request->query('path');return $this->relay($this->service($request,'packwiz.edit')->delete("/projects/{$project}/folders?path=".rawurlencode($path)));}
     public function updateProject(Request $request,Server $server,string $project):Response{$this->authorizeServer($request,$server);$request->validate(['display_name'=>'required|string','minecraft_version'=>'required|string','loader'=>'required|string','loader_version'=>'required|string','pack_version'=>'required|string']);return $this->relay($this->service($request,'packwiz.edit')->patch("/projects/{$project}",$request->only(['display_name','minecraft_version','loader','loader_version','pack_version'])));}
     public function rollback(Request $request, Server $server, string $project, int $revision): Response { $this->authorizeServer($request, $server); return $this->relay($this->service($request, 'packwiz.publish')->post("/projects/{$project}/rollback/{$revision}")); }
     public function search(Request $request, Server $server, string $provider): Response { $this->authorizeServer($request, $server); abort_unless(in_array($provider, ['modrinth', 'curseforge'], true), 404); return $this->relay($this->service($request, 'packwiz.read')->get("/providers/{$provider}/search", $request->query())); }
