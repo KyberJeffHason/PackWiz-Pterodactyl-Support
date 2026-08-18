@@ -66,6 +66,7 @@ func (a *API) Routes() http.Handler {
 	m.HandleFunc("POST /projects/import", a.importProject)
 	m.HandleFunc("POST /projects/{id}/custom-jars", a.uploadJAR)
 	m.HandleFunc("POST /projects/{id}/files", a.uploadFile)
+	m.HandleFunc("DELETE /projects/{id}/folders", a.removeFolder)
 	m.HandleFunc("POST /projects/{id}/url-imports", a.importURL)
 	m.HandleFunc("POST /projects/{id}/mods", a.addMod)
 	m.HandleFunc("GET /projects/{id}/items", a.listItems)
