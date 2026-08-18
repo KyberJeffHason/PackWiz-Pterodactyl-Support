@@ -21,11 +21,6 @@ func normalizeManagedFolderDeletePath(value string) (string, error) {
 	if rel == clientFilesRoot || strings.HasPrefix(rel, clientFilesRoot+"/") {
 		return "", errors.New("client-files does not support folders")
 	}
-	for _, root := range managedFileRoots {
-		if rel == root {
-			return "", errors.New("managed root directories cannot be deleted")
-		}
-	}
 	return rel, nil
 }
 
