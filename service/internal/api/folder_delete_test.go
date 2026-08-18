@@ -4,10 +4,15 @@ import "testing"
 
 func TestNormalizeManagedFolderDeletePath(t *testing.T) {
 	valid := []string{
+		"config",
 		"config/example",
+		"defaultconfigs",
 		"defaultconfigs/nested/folder",
+		"kubejs",
 		"kubejs/server_scripts",
+		"datapacks",
 		"datapacks/my pack/data",
+		"resourcepacks",
 		"resourcepacks/custom/assets",
 	}
 	for _, input := range valid {
@@ -22,11 +27,6 @@ func TestNormalizeManagedFolderDeletePath(t *testing.T) {
 
 	invalid := []string{
 		"",
-		"config",
-		"defaultconfigs",
-		"kubejs",
-		"datapacks",
-		"resourcepacks",
 		"client-files",
 		"client-files/nested",
 		"mods/example",
