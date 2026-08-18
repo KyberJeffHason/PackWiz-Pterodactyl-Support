@@ -69,7 +69,7 @@ func (a *API) removeFolder(w http.ResponseWriter, r *http.Request) {
 	}
 	defer tx.Rollback()
 	prefix := rel + "/"
-	result, err := tx.ExecContext(r.Context(), `DELETE FROM items WHERE project_id=? AND kind<>'mod' AND (target_path=? OR substr(target_path,1,?)=?)`, project.ID, rel, len(prefix), prefix)
+	result, err := tx.ExecContext(r.Context(), `DELETE FROM items WHERE project_id=? AND kind<>'mod' AND (target_path=? OR instr(target_path,?)=1)`, project.ID, rel, prefix)
 	if err != nil {
 		respond(w, nil, err)
 		return
