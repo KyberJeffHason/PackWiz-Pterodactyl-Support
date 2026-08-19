@@ -18,8 +18,9 @@ type Blob struct {
 }
 
 type Store struct {
-	Root     string
-	MaxBytes int64
+	Root          string
+	MaxBytes      int64
+	MaxJAREntries int
 }
 
 func (s Store) Put(r io.Reader, filename, mime string, requireJAR bool) (Blob, error) {
@@ -54,7 +55,10 @@ func (s Store) Put(r io.Reader, filename, mime string, requireJAR bool) (Blob, e
 		if !strings.HasSuffix(strings.ToLower(filename), ".jar") {
 			return Blob{}, errors.New("custom mod must use .jar extension")
 		}
-		if err := verifyJAR(tmpName); err != nil {
+		if s.MaxJAREntries < 1 {
+			return Blob{}, errors.New("invalid JAR entry limit")
+		}
+		if err := verifyJAR(tmpName, s.MaxJAREntries); err != nil {
 			return Blob{}, err
 		}
 	}
@@ -72,13 +76,13 @@ func (s Store) Put(r io.Reader, filename, mime string, requireJAR bool) (Blob, e
 	return Blob{SHA256: digest, Path: final, Filename: filename, MIME: mime, Size: n}, nil
 }
 
-func verifyJAR(name string) error {
+func verifyJAR(name string, maxEntries int) error {
 	z, err := zip.OpenReader(name)
 	if err != nil {
 		return fmt.Errorf("invalid JAR/ZIP: %w", err)
 	}
 	defer z.Close()
-	if len(z.File) == 0 || len(z.File) > 10000 {
+	if len(z.File) == 0 || len(z.File) > maxEntries {
 		return errors.New("invalid JAR entry count")
 	}
 	var expanded uint64
